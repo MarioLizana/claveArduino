@@ -31,11 +31,19 @@ LiquidCrystal lcd(5, 4, 3, 2, 1, 0);
 void despierta(void) {
 }
 
+void borraPantalla(){
+  lcd.setCursor(0, 0);
+  lcd.print("                ");
+  lcd.setCursor(0, 1);
+  lcd.print("                ");
+  lcd.setCursor(0, 0);
+}
+
 void setup(){
    Serial.begin(9600);
-   delay(3000);
+   //delay(3000);
   lcd.begin(16, 2);
-   //  EEPROM.write(0, 0xF);      //pARA SIMULAR PRIMERA VEZ
+   EEPROM.write(0, 0xF);      //pARA SIMULAR PRIMERA VEZ
    if(EEPROM.read(0)==0xF){                              //Si la posicion 0 es F, nunca se ha encendido el PIC. La clave es 1 2 3 4.
       for(i=0; i<4; i++){
          claveUsuario[i]=clave1234[i];
@@ -50,15 +58,57 @@ void setup(){
          
       }
    }
+  
+  
+  
+  // initialize timer1 
+  noInterrupts();           // disable all interrupts
+  TCCR1A = 0;
+  TCCR1B = 0;
 
+  TCNT1 = 34286;            // preload timer 65536-16MHz/256/2Hz
+  //TCCR1B |= (1 << CS12);    
+  TCCR1B = TCCR1B & 0b11111000 | 0x04;          
+  TIMSK1 |= (1 << TOIE1);   // enable timer overflow interrupt
+  interrupts();             // enable all interrupts
   
 }
+
+
+ISR(TIMER1_OVF_vect){
+  compruebaPIR();
+}
+
+
+
+void compruebaPIR(){
+  if(analogRead(A0)>60){
+    borraPantalla();
+    lcd.print("LADRON DETECTADO");
+    while(true){
+      digitalWrite(A5, HIGH);
+      delay(5000);
+      digitalWrite(A5, LOW);
+      delay(5000);
+    }
+  }
+}
+
+
+
+
+
+
+
+
 
 
 void loop(){
   //lcd_send_byte(0, 1); //Borra LCD
   error=0;
-  lcd.print("Pass: ");
+  lcd.setCursor(0, 0);
+  lcd.print("Pass:           ");
+  lcd.setCursor(7, 0);
   
   for(i=0; i<4; i++){                                //Pido el pass, si se pulsa / salgo del bucle.
     tecla=0;
@@ -66,7 +116,7 @@ void loop(){
       tecla = keypad.getKey();
     }
   
-    if(tecla==47){
+    if(tecla=='A'){
       break;
     }
     
@@ -75,9 +125,10 @@ void loop(){
     
   }
 
-  if(tecla==47){                                     //Pido el pass anterior antes de cambiar la clave.
+  if(tecla=='A'){                                     //Pido el pass anterior antes de cambiar la clave.
     lcd.setCursor(0, 0);
-    lcd.print("PASS ATERIOR?:\n");
+    lcd.print("PASS ANTERIOR?:");
+    lcd.setCursor(0, 1);
     for(i=0; i<4; i++){
       tecla=0;
       
@@ -86,8 +137,9 @@ void loop(){
       }
       
       claveEscrita[i]=tecla-48;
-      lcd.print('tecla');
+      lcd.print(tecla);
     }
+    delay(1000);
     error=0;
     
     for (i=0; i<4; i++){
@@ -98,20 +150,31 @@ void loop(){
     if(!error){                                     //Si no hay errores en lo pass cambio 
     //lcd_send_byte(0, 1); //Borra LCD
     
-    lcd.print("PASS ATERIOR?:\n");
-    lcd.print('tecla');
+    borraPantalla();
+    lcd.print("CLAVE CORRECTA ! ");
+    lcd.print(tecla);
     delay(1000);
     //lcd_send_byte(0, 1); //Borra LCD
-    lcd.print("Nuevo PASS: \n");
+    borraPantalla();
+    lcd.print("Nuevo PASS: ");
     EEPROM.write(0, 0xA);                          //Se ha introducido una clave por primera vez.
+    lcd.setCursor(0, 1);
     for(i=1; i<5; i++){
       tecla=0;
       while (tecla==0){
         tecla = keypad.getKey();
       }
       EEPROM.write(i, tecla-48);
-      lcd.print('tecla');
+      lcd.print(tecla);
     }
+    delay(1000);
+    borraPantalla();
+    lcd.print("OK, nueva clave");
+    lcd.setCursor(0, 1);
+    lcd.print("definida");
+    delay(2000);
+    borraPantalla();
+
     for(i=0; i<4; i++){
       claveUsuario[i]=EEPROM.read(i+1);
       delay(100);
@@ -120,7 +183,8 @@ void loop(){
     }
     else{                                           //Si hay errores no hago nada digo que la clave es incorrecta.
       //lcd_send_byte(0, 1); //Borra LCD
-      lcd.print("CLAVE INCORRECTA: \n");
+      borraPantalla();
+      lcd.print("CLAVE INCORRECTA: ");
       delay(1000);
     }
   }
@@ -132,17 +196,23 @@ void loop(){
       }
     }
     if(!error){
-      lcd.setCursor(0, 1);
-      lcd.print("CLAVE CORRECTA      ");
-      //digitalWrite(13, HIGH);
+      borraPantalla();
+      lcd.print("CLAVE CORRECTA ! ");
       delay(1000);
-      //digitalWrite(13, LOW);
+      lcd.setCursor(0, 1);
+      lcd.print("DESACTIVANDO...");
+      delay(1000);
+      noInterrupts();
+      borraPantalla();
+      lcd.print("DESACTIVADA :)");
+      while(true);
+      //digitalWrite(A5, LOW);
       //lcd_send_byte(0, 1); //Borra LCD
-      lcd.print("zZzZzZzZZZ");
+      //lcd.print("zZzZzZzZZZ");
       //sleep();
     }
     else{
-      lcd.setCursor(0, 1);
+      borraPantalla();
       lcd.print("CLAVE INCORRECTA");
       delay(1000);
     }
